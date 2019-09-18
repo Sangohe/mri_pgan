@@ -303,6 +303,23 @@ def create_mnist(tfrecord_dir, mnist_dir):
         for idx in range(order.size):
             tfr.add_image(images[order[idx]])
         tfr.add_labels(onehot[order])
+        
+#----------------------------------------------------------------------------
+
+def create_acdc(tfrecord_dir):
+    
+    images = np.load('./npy/acdc-256-data.npy') # Import data.npy
+    images = images.transpose(0, 3, 1, 2)
+    labels = np.load('./npy/acdc-256-labels.npy') # Import labels.npy
+    assert images.shape == (25351, 3, 256, 256)
+    assert labels.shape == (25351,5)
+    assert np.min(images) == 0 and np.max(images) == 255
+    
+    with TFRecordExporter(tfrecord_dir, images.shape[0]) as tfr:
+        order = tfr.choose_shuffled_order()
+        for idx in range(order.size):
+            tfr.add_image(images[order[idx]])
+        tfr.add_labels(labels[order])        
 
 #----------------------------------------------------------------------------
 
@@ -726,6 +743,10 @@ def execute_cmdline(argv):
     p.add_argument(     'tfrecord_dir',     help='New dataset directory to be created')
     p.add_argument(     'hdf5_filename',    help='HDF5 archive containing the images')
     p.add_argument(     '--shuffle',        help='Randomize image order (default: 1)', type=int, default=1)
+    
+    p = add_command(    'create_acdc',     'Create dataset for ACDC.',
+                                            'create_acdc datasets/acdc')
+    p.add_argument(     'tfrecord_dir',     help='New dataset directory to be created')
 
     args = parser.parse_args(argv[1:] if len(argv) > 1 else ['-h'])
     func = globals()[args.command]
