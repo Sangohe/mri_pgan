@@ -20,6 +20,7 @@ import misc
 import tfutil
 import train
 import dataset
+import cv2
 
 
 #----------------------------------------------------------------------------
@@ -38,16 +39,21 @@ def find_latent_with_query_image(run_id, snapshot=None, grid_size=[1,1], num_png
     result_subdir = misc.create_result_subdir(config.result_dir, config.desc)
     
     # Create query image - tensorflow constant
-    query_image = cv2.imread('../../data/ACDC/training/patient001/cardiac_cycles/1/0.png')
+    query_image = cv2.imread('../../data/ACDC/testing/patient143/cardiac_cycles/0/0.png')
+    query_image = cv2.resize(query_image, (256, 256))
+    print('Saving query image to "%s"...' % result_subdir)
+    cv2.imwrite(result_subdir+'/query_image.png', query_image)
+    query_image = query_image.transpose(2,0,1)
+    query_image = query_image[np.newaxis]
     x = tf.constant(query_image, dtype=tf.float32, name='query_image')
     # Create G(z) - tensorflow variable and label
     latent = misc.random_latents(np.prod(grid_size), Gs, random_state=random_state)
     initial = tf.constant(latent, dtype=tf.float32)
     z = tf.Variable(initial_value=initial, dtype=tf.float32, name='latent_space')
-    gz = Gs.run(latent, label, minibatch_size=minibatch_size, num_gpus=config.num_gpus, out_mul=127.5, out_add=127.5, out_shrink=image_shrink, out_dtype=np.float32)
-    gz = tf.constant(gz, dtype=tf.float32)
     label = np.zeros([latent.shape[0], 5], np.float32)
-    label[:,1] = 1
+    label[:,4] = 1 # | 0 -> NOR | 1 -> DCM | 2 -> HCM | 3 -> MINF | 4 -> RV | 
+    gz = Gs.run(latent, label, minibatch_size=minibatch_size, num_gpus=config.num_gpus, out_mul=127.5, out_add=127.5, out_shrink=image_shrink, out_dtype=np.float32)
+    gz = tf.Variable(gz, dtype=tf.float32)
     # Define a loss function
     residual_loss = tf.losses.absolute_difference(x, gz)
     # Define an optimizer
@@ -58,15 +64,19 @@ def find_latent_with_query_image(run_id, snapshot=None, grid_size=[1,1], num_png
     with tf.Session() as sess:
         sess.run(tf.global_variables_initializer())
         _, loss_value = sess.run([train_op, residual_loss])
-        while loss_value > 10:
+        while (loss_value > 2e-04 and step < 300000):
             _, loss_value = sess.run([train_op, residual_loss])
             step += 1
-            if step % 10000 == 0:
+            if step % 1500 == 0:
                 print('Step {}, Loss value: {}'.format(step, loss_value))
                 gzs.append(sess.run(gz))
                 zs.append(sess.run(z))
-                print(np.array_equal(gzs[-1], gzs[-2]), np.array_equal(gzs[-1], gzs[-2]))
-
+                
+    for png_idx, image in enumerate(gzs):
+        misc.save_image_grid(image, os.path.join(result_subdir, '%s%06d.png' % (png_prefix, png_idx)), [0,255], grid_size)
+        
+    np.save(result_subdir+'/zs.npy', np.asarray(zs))
+    
 
 #----------------------------------------------------------------------------
 # Generate random images or image grids using a previously trained network.
