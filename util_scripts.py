@@ -21,6 +21,53 @@ import tfutil
 import train
 import dataset
 
+
+#----------------------------------------------------------------------------
+# Find the latent space vector that generates the closest looking image to a query image given
+# To run, uncomment the appropriate line in config.py and launch train.py.
+
+def find_latent_with_query_image(run_id, snapshot=None, grid_size=[1,1], num_pngs=1, image_shrink=1, png_prefix=None, random_seed=4123, minibatch_size=8):
+    network_pkl = misc.locate_network_pkl(run_id, snapshot)
+    if png_prefix is None:
+        png_prefix = misc.get_id_string_for_network_pkl(network_pkl) + '-'
+    random_state = np.random.RandomState(random_seed)
+
+    print('Loading network from "%s"...' % network_pkl)
+    G, D, Gs = misc.load_network_pkl(run_id, snapshot)
+
+    result_subdir = misc.create_result_subdir(config.result_dir, config.desc)
+    
+    # Create query image - tensorflow constant
+    query_image = cv2.imread('../../data/ACDC/training/patient001/cardiac_cycles/1/0.png')
+    x = tf.constant(query_image, dtype=tf.float32, name='query_image')
+    # Create G(z) - tensorflow variable and label
+    latent = misc.random_latents(np.prod(grid_size), Gs, random_state=random_state)
+    initial = tf.constant(latent, dtype=tf.float32)
+    z = tf.Variable(initial_value=initial, dtype=tf.float32, name='latent_space')
+    gz = Gs.run(latent, label, minibatch_size=minibatch_size, num_gpus=config.num_gpus, out_mul=127.5, out_add=127.5, out_shrink=image_shrink, out_dtype=np.float32)
+    gz = tf.constant(gz, dtype=tf.float32)
+    label = np.zeros([latent.shape[0], 5], np.float32)
+    label[:,1] = 1
+    # Define a loss function
+    residual_loss = tf.losses.absolute_difference(x, gz)
+    # Define an optimizer
+    train_op = tf.train.AdamOptimizer(learning_rate=0.001).minimize(residual_loss)
+    
+    zs, gzs, step = [], [], 1
+    
+    with tf.Session() as sess:
+        sess.run(tf.global_variables_initializer())
+        _, loss_value = sess.run([train_op, residual_loss])
+        while loss_value > 10:
+            _, loss_value = sess.run([train_op, residual_loss])
+            step += 1
+            if step % 10000 == 0:
+                print('Step {}, Loss value: {}'.format(step, loss_value))
+                gzs.append(sess.run(gz))
+                zs.append(sess.run(z))
+                print(np.array_equal(gzs[-1], gzs[-2]), np.array_equal(gzs[-1], gzs[-2]))
+
+
 #----------------------------------------------------------------------------
 # Generate random images or image grids using a previously trained network.
 # To run, uncomment the appropriate line in config.py and launch train.py.
