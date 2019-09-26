@@ -21,7 +21,53 @@ import tfutil
 import train
 import dataset
 import cv2
+import glob
 
+#----------------------------------------------------------------------------
+# Creates new folders following the same pattern as the one in `input_path`
+
+def replicate_folder_structure(inputpath, outputpath):
+    for dirpath, dirnames, filenames in os.walk(inputpath):
+        structure = os.path.join(outputpath, dirpath[len(inputpath):])
+        if not os.path.isdir(structure):
+            os.mkdir(structure)
+        else:
+            print("Folder does already exits!")
+
+#----------------------------------------------------------------------------
+# Sorts a list 
+
+def sorted_nicely( l ):
+    """ Sorts the given iterable in the way that is expected.
+ 
+    Required arguments:
+    l -- The iterable to be sorted.
+ 
+    """
+    convert = lambda text: int(text) if text.isdigit() else text
+    alphanum_key = lambda key: [convert(c) for c in re.split('([0-9]+)', key)]
+    return sorted(l, key = alphanum_key) 
+
+#----------------------------------------------------------------------------
+# Maps a condition to one_hot_encoded vector
+'''
+    label = np.zeros([latent.shape[0], 5], np.float32)
+    label[:,4] = 1 # | 0 -> NOR | 1 -> DCM | 2 -> HCM | 3 -> MINF | 4 -> RV | 
+'''
+
+
+def condition_to_onehot(condition):
+    label = np.zeros([1, 5], np.float32)
+    if 'NOR' in condition:
+        return label[:,0] = 1
+    elif 'DCM' in condition:
+        return label[:,1] = 1
+    elif 'HCM' in condition:
+        return label[:,2] = 1
+    elif 'MINF' in condition:
+        return label[:,3] = 1
+    elif 'RV' in condition:
+        return label[:,4] = 1
 
 #----------------------------------------------------------------------------
 # Find the latent space vector that generates the closest looking image to a query image given
@@ -91,45 +137,53 @@ def find_dir_latent_with_query_image(run_id, snapshot=None, grid_size=[1,1], num
     G, D, Gs = misc.load_network_pkl(run_id, snapshot)
 
     result_subdir = misc.create_result_subdir(config.result_dir, config.desc)
+
+    replicate_folder_structure(train_folder, result_subdir+'/')
+
+    # train_patients = sorted_nicely(glob.glob(train_folder+'*'))
+
+    # for patient in train_patients:
+    #     cardiac_cycles = sorted_nicely(glob.glob(patient+'/*/*/*.png'))
+    #     cfg = open(patient+'/Info.cfg')
+    #     label = condition_to_onehot(cfg.readlines()[2][7:])
+    #     for cycle in cardiac_cycles:
+    #         # Create query image - tensorflow constant
+    #         query_image = cv2.imread(cycle) # read frame
+    #         query_image = cv2.resize(query_image, (256, 256))
+    #         query_image = query_image.transpose(2,0,1)
+    #         query_image = query_image[np.newaxis]
+    #         x = tf.constant(query_image, dtype=tf.float32, name='query_image')
+
+    #         # Create G(z) - tensorflow variable and label
+    #         latent = misc.random_latents(np.prod(grid_size), Gs, random_state=random_state)
+    #         initial = tf.constant(latent, dtype=tf.float32)
+    #         z = tf.Variable(initial_value=initial, dtype=tf.float32, name='latent_space')
+    #         gz = Gs.run(latent, label, minibatch_size=minibatch_size, num_gpus=config.num_gpus, out_mul=127.5, out_add=127.5, out_shrink=image_shrink, out_dtype=np.float32)
+    #         gz = tf.Variable(gz, dtype=tf.float32)
+
+    #         # Define a loss function
+    #         residual_loss = tf.losses.absolute_difference(x, gz)
+    #         # Define an optimizer
+    #         train_op = tf.train.AdamOptimizer(learning_rate=0.001).minimize(residual_loss)
+
+    #         zs, gzs, step = [], [], 1
     
-    # Create query image - tensorflow constant
-    query_image = cv2.imread('../../data/ACDC/testing/patient143/cardiac_cycles/0/0.png')
-    query_image = cv2.resize(query_image, (256, 256))
-    print('Saving query image to "%s"...' % result_subdir)
-    cv2.imwrite(result_subdir+'/query_image.png', query_image)
-    query_image = query_image.transpose(2,0,1)
-    query_image = query_image[np.newaxis]
-    x = tf.constant(query_image, dtype=tf.float32, name='query_image')
-    # Create G(z) - tensorflow variable and label
-    latent = misc.random_latents(np.prod(grid_size), Gs, random_state=random_state)
-    initial = tf.constant(latent, dtype=tf.float32)
-    z = tf.Variable(initial_value=initial, dtype=tf.float32, name='latent_space')
-    label = np.zeros([latent.shape[0], 5], np.float32)
-    label[:,4] = 1 # | 0 -> NOR | 1 -> DCM | 2 -> HCM | 3 -> MINF | 4 -> RV | 
-    gz = Gs.run(latent, label, minibatch_size=minibatch_size, num_gpus=config.num_gpus, out_mul=127.5, out_add=127.5, out_shrink=image_shrink, out_dtype=np.float32)
-    gz = tf.Variable(gz, dtype=tf.float32)
-    # Define a loss function
-    residual_loss = tf.losses.absolute_difference(x, gz)
-    # Define an optimizer
-    train_op = tf.train.AdamOptimizer(learning_rate=0.001).minimize(residual_loss)
-    
-    zs, gzs, step = [], [], 1
-    
-    with tf.Session() as sess:
-        sess.run(tf.global_variables_initializer())
-        _, loss_value = sess.run([train_op, residual_loss])
-        while (loss_value > 2e-04 and step < 300000):
-            _, loss_value = sess.run([train_op, residual_loss])
-            step += 1
-            if step % 1500 == 0:
-                print('Step {}, Loss value: {}'.format(step, loss_value))
-                gzs.append(sess.run(gz))
-                zs.append(sess.run(z))
-                
-    for png_idx, image in enumerate(gzs):
-        misc.save_image_grid(image, os.path.join(result_subdir, '%s%06d.png' % (png_prefix, png_idx)), [0,255], grid_size)
-        
-    np.save(result_subdir+'/zs.npy', np.asarray(zs))    
+    #         with tf.Session() as sess:
+    #             sess.run(tf.global_variables_initializer())
+    #             _, loss_value = sess.run([train_op, residual_loss])
+    #             while (loss_value > 2e-04 and step < 300000):
+    #                 _, loss_value = sess.run([train_op, residual_loss])
+    #                 step += 1
+    #                 if step % 1500 == 0:
+    #                     print('Step {}, Loss value: {}'.format(step, loss_value))
+    #                     gzs.append(sess.run(gz))
+    #                     zs.append(sess.run(z))
+            
+    #         for png_idx, image in enumerate(gzs):
+    #             misc.save_image_grid(image, os.path.join(result_subdir, '%s%06d.png' % (png_prefix, png_idx)), [0,255], grid_size)
+
+    #     cfg.close()
+     
     
 
 #----------------------------------------------------------------------------
