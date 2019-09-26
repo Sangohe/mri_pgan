@@ -59,15 +59,20 @@ def sorted_nicely( l ):
 def condition_to_onehot(condition):
     label = np.zeros([1, 5], np.float32)
     if 'NOR' in condition:
-        return label[:,0] = 1
+        label[:,0] = 1
+        return label
     elif 'DCM' in condition:
-        return label[:,1] = 1
+        label[:,1] = 1
+        return label
     elif 'HCM' in condition:
-        return label[:,2] = 1
+        label[:,2] = 1
+        return label
     elif 'MINF' in condition:
-        return label[:,3] = 1
+        label[:,3] = 1
+        return label
     elif 'RV' in condition:
-        return label[:,4] = 1
+        label[:,4] = 1
+        return label
 
 #----------------------------------------------------------------------------
 # Find the latent space vector that generates the closest looking image to a query image given
@@ -127,7 +132,7 @@ def find_latent_with_query_image(run_id, snapshot=None, grid_size=[1,1], num_png
 # Find the latent space vector that generates the closest looking image for every image inside a the training/test directory
 # To run, uncomment the appropriate line in config.py and launch train.py.
 
-def find_dir_latent_with_query_image(run_id, snapshot=None, grid_size=[1,1], num_pngs=1, image_shrink=1, png_prefix=None, random_seed=4123, minibatch_size=8, dir_path='../../data/ACDC/training/'):
+def find_dir_latent_with_query_image(run_id, snapshot=None, grid_size=[1,1], num_pngs=1, image_shrink=1, png_prefix=None, random_seed=4123, minibatch_size=8, dir_path='../../data/ACDC/training_copy/'):
     network_pkl = misc.locate_network_pkl(run_id, snapshot)
     if png_prefix is None:
         png_prefix = misc.get_id_string_for_network_pkl(network_pkl) + '-'
@@ -138,7 +143,7 @@ def find_dir_latent_with_query_image(run_id, snapshot=None, grid_size=[1,1], num
 
     result_subdir = misc.create_result_subdir(config.result_dir, config.desc)
 
-    replicate_folder_structure(train_folder, result_subdir+'/')
+    replicate_folder_structure(dir_path, result_subdir+'/')
 
     # train_patients = sorted_nicely(glob.glob(train_folder+'*'))
 
