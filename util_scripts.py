@@ -97,7 +97,7 @@ def find_latent_with_query_image(run_id, snapshot=None, grid_size=[1,1], num_png
     result_subdir = misc.create_result_subdir(config.result_dir, config.desc)
     
     # Create query image - tensorflow constant
-    query_image = cv2.imread('../../data/ACDC/testing/patient143/cardiac_cycles/0/0.png')
+    query_image = cv2.imread('../../data/ACDC/training/patient001/cardiac_cycles/0/0.png')
     query_image = cv2.resize(query_image, (256, 256))
     print('Saving query image to "%s"...' % result_subdir)
     cv2.imwrite(result_subdir+'/query_image.png', query_image)
@@ -115,17 +115,17 @@ def find_latent_with_query_image(run_id, snapshot=None, grid_size=[1,1], num_png
     # Define a loss function
     residual_loss = tf.losses.absolute_difference(x, gz)
     # Define an optimizer
-    train_op = tf.train.AdamOptimizer(learning_rate=0.001).minimize(residual_loss)
+    train_op = tf.train.AdamOptimizer(learning_rate=0.01).minimize(residual_loss)
     
     zs, gzs, step = [], [], 1
     
     with tf.Session() as sess:
         sess.run(tf.global_variables_initializer())
         _, loss_value = sess.run([train_op, residual_loss])
-        while (loss_value > 2e-04 and step < 300000):
+        while (loss_value > 2e-04 and step <= 50000):
             _, loss_value = sess.run([train_op, residual_loss])
             step += 1
-            if step % 1500 == 0:
+            if step % 10000 == 0:
                 print('Step {}, Loss value: {}'.format(step, loss_value))
                 gzs.append(sess.run(gz))
                 zs.append(sess.run(z))
@@ -139,7 +139,7 @@ def find_latent_with_query_image(run_id, snapshot=None, grid_size=[1,1], num_png
 # Find the latent space vector that generates the closest looking image for every image inside a the training/test directory
 # To run, uncomment the appropriate line in config.py and launch train.py.
 
-def find_dir_latent_with_query_image(run_id, snapshot=None, grid_size=[1,1], num_pngs=1, image_shrink=1, png_prefix=None, random_seed=4123, minibatch_size=8, dir_path='../../data/ACDC/training_copy/'):
+def find_dir_latent_with_query_image(run_id, snapshot=None, grid_size=[1,1], num_pngs=1, image_shrink=1, png_prefix=None, random_seed=4123, minibatch_size=8, dir_path='../../data/ACDC/nor_and_dcm/'):
     network_pkl = misc.locate_network_pkl(run_id, snapshot)
     if png_prefix is None:
         png_prefix = misc.get_id_string_for_network_pkl(network_pkl) + '-'
@@ -151,16 +151,17 @@ def find_dir_latent_with_query_image(run_id, snapshot=None, grid_size=[1,1], num
     result_subdir = misc.create_result_subdir(config.result_dir, config.desc)
     replicate_folder_structure(dir_path, result_subdir+'/')
 
-    train_patients = sorted_nicely(glob.glob(train_folder+'*'))
+    train_patients = sorted_nicely(glob.glob(dir_path+'*'))
 
     for patient in train_patients:
         cardiac_cycles = sorted_nicely(glob.glob(patient+'/*/*/*.png'))
         cfg = open(patient+'/Info.cfg')
         label = condition_to_onehot(cfg.readlines()[2][7:])
-        for i, cycle in enumerate(cardiac_cycles):
+        cont = 0
+        for cycle in cardiac_cycles:
             # Get folder containing the image
             supfolder = sup_folder(cycle)
-            latent_subir = results_subdir + '/' + supfolder
+            latent_subir = result_subdir + '/' + supfolder
 
             # Create query image - tensorflow constant
             query_image = cv2.imread(cycle) # read frame
@@ -179,27 +180,32 @@ def find_dir_latent_with_query_image(run_id, snapshot=None, grid_size=[1,1], num
             # Define a loss function
             residual_loss = tf.losses.absolute_difference(x, gz)
             # Define an optimizer
-            train_op = tf.train.AdamOptimizer(learning_rate=0.001).minimize(residual_loss)
+            train_op = tf.train.AdamOptimizer(learning_rate=0.01).minimize(residual_loss)
 
             zs, gzs, step = [], [], 1
     
             with tf.Session() as sess:
                 sess.run(tf.global_variables_initializer())
                 _, loss_value = sess.run([train_op, residual_loss])
-                while (loss_value > 2e-04 and step < 300000):
+                while (loss_value > 2e-04 and step <= 50000):
                     _, loss_value = sess.run([train_op, residual_loss])
                     step += 1
-                    if step % 1500 == 0:
+                    if step % 10000 == 0:
                         print('Step {}, Loss value: {}'.format(step, loss_value))
                         gzs.append(sess.run(gz))
                         zs.append(sess.run(z))
             
             # save last image
-            misc.save_image_grid(gzs[-1], os.path.join(latent_subir, '%s.png' % (i)), [0,255], grid_size)
-            np.save(os.path.join(latent_subir, 'latent_%02d.npy' % (i)), zs[-1])
-            np.save(os.path.join(latent_subir, 'label_%02d.npy' % (i)), label)
+            print('Image saved at {}'.format(os.path.join(latent_subir, '%s.png' % (cont))))
+            misc.save_image_grid(gzs[-1], os.path.join(latent_subir, '%02d.png' % (cont)), [0,255], grid_size)
+            print('Latent vectors saved at {}'.format(os.path.join(latent_subir, 'latent_%02d.npy' % (cont))))
+            np.save(os.path.join(latent_subir, 'latent_%02d.npy' % (cont)), zs[-1])
+            print('Labels saved at {}'.format(os.path.join(latent_subir, 'label_%02d.npy' % (cont))))
+            np.save(os.path.join(latent_subir, 'label_%02d.npy' % (cont)), label)
+            cont+=1
 
         cfg.close()
+        cont = 0
      
     
 
