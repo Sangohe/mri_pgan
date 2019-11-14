@@ -31,9 +31,12 @@ import scipy.misc
 import math
 import sys
 
-MODEL_DIR = '/tmp/imagenet'
+# MODEL_DIR = '/tmp/imagenet'
+MODEL_DIR = '034-pgan-acdc_cleaned-cond-preset-v2-1gpu-fp32'
 
+# DATA_URL = 'http://download.tensorflow.org/models/image/imagenet/inception-2015-12-05.tgz'
 DATA_URL = 'http://download.tensorflow.org/models/image/imagenet/inception-2015-12-05.tgz'
+
 softmax = None
 
 # Call this function with list of images. Each of elements should be a 
@@ -109,6 +112,7 @@ def _init_inception():
             except ValueError:
                 o._shape_val = tf.TensorShape(new_shape) # EDIT: added for compatibility with tensorflow 1.6.0
     w = sess.graph.get_operation_by_name("softmax/logits/MatMul").inputs[1]
+    print(w, pool3)
     logits = tf.matmul(tf.squeeze(pool3), w)
     softmax = tf.nn.softmax(logits)
 
